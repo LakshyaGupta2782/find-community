@@ -21,11 +21,6 @@ app.get('/', (req, res) => {
   res.send('Community Connect Platform Backend API');
 });
 
-// TODO: Include all your routes here
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/users', require('./routes/userRoutes'));
-app.use('/api/chat', require('./routes/chatRoutes'));
-// app.use('/api/community', require('./routes/communityRoutes'));
 
 // Start Server
 app.listen(PORT, () => {
