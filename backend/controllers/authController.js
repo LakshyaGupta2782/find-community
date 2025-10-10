@@ -38,6 +38,7 @@ exports.signin = async (req, res) => {
     const { email } = req.body;
 
     // 1. Check if a user with this email exists
+    
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ message: 'User not found. Please sign up first.' });
@@ -114,90 +115,193 @@ exports.verifyOtp = async (req, res) => {
 };
 
 
+// // Controller for the /upload-aadhaar route
+// exports.uploadAadhaar = async (req, res) => {
+//   try {
+//     // The 'auth' middleware has already added the userId to the request object.
+//     const userId = req.userId;
 
+//     // The 'multer' middleware has added the file info to the request object.
+//     const file = req.file;
 
+//     // 1. Check if a file was actually uploaded
+//     if (!file) {
+//       return res.status(400).json({ message: 'No Aadhaar card image was uploaded.' });
+//     }
 
+//     // For now, we will just confirm that we received the file.
+//     // In the next steps, we will process this file to read the QR code.
+//     console.log(`Received Aadhaar card for user: ${userId}`);
+//     console.log('File details:', file);
 
+//     // 2. Send a temporary success response
+//     res.status(200).json({
+//       message: 'Aadhaar card uploaded successfully. Processing will begin.',
+//       filePath: file.path,
+//     });
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// const User = require('../models/User');
-// const sendOTPEmail = require('../utils/sendEmail');
-// const jwt = require('jsonwebtoken');
-
-// exports.signup = async (req, res) => {
-//   const { email } = req.body;
-//   if (!email) return res.status(400).json({ message: 'Email is required' });
-
-//   const existingUser = await User.findOne({ email });
-//   if (existingUser) return res.status(409).json({ message: 'User already exists' });
-
-//   const user = new User({ email });
-//   await user.save();
-
-//   res.json({ message: 'Signup successful, proceed to Aadhaar upload' });
-// };
-
-// exports.signin = async (req, res) => {
-//   const { email } = req.body;
-//   if (!email) return res.status(400).json({ message: 'Email is required' });
-
-//   const user = await User.findOne({ email });
-//   if (!user) return res.status(404).json({ message: 'User not found' });
-
-//   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-//   user.otp = otp;
-//   user.otpExpiry = Date.now() + 5 * 60 * 1000;
-//   await user.save();
-
-//   await sendOTPEmail(email, otp);
-
-//   res.json({ message: 'OTP sent to your email' });
+//   } catch (error) {
+//     console.error('Aadhaar upload error:', error);
+//     res.status(500).json({ message: 'Server error during Aadhaar upload.' });
+//   }
 // };
 
 
-// exports.verifyOtp = async (req, res) => {
-//   const { email, otp } = req.body;
-//   if (!email || !otp) return res.status(400).json({ message: 'Email and OTP are required' });
 
-//   const user = await User.findOne({ email });
-//   if (!user) return res.status(404).json({ message: 'User not found' });
 
-//   if (user.otp !== otp) return res.status(401).json({ message: 'Invalid OTP' });
-//   if (Date.now() > user.otpExpiry) return res.status(410).json({ message: 'OTP expired' });
+// const fs = require('fs'); // Node.js File System module
+// const Jimp = require('jimp');
+// const QrCode = require('qrcode-reader');
 
-//   user.otp = undefined;
-//   user.otpExpiry = undefined;
-//   await user.save();
+// // Controller for the /upload-aadhaar route
+// exports.uploadAadhaar = async (req, res) => {
+//   // The 'auth' middleware has already added the userId to the request object.
+//   const userId = req.userId;
+//   const file = req.file;
 
-//   // Generate JWT token
-//   const token = jwt.sign(
-//     { userId: user._id, email: user.email },
-//     process.env.JWT_SECRET,
-//     { expiresIn: '7d' } // token valid for 7 days
-//   );
+//   // 1. Check if a file was actually uploaded
+//   if (!file) {
+//     return res.status(400).json({ message: 'No Aadhaar card image was uploaded.' });
+//   }
 
-//   res.json({ message: 'OTP verified, user authenticated', token });
+//   const filePath = file.path;
+
+//   try {
+//     // 2. Read the image buffer from the uploaded file path
+//     const buffer = fs.readFileSync(filePath);
+//     const image = await Jimp.read(buffer);
+
+//     // 3. Initialize a QR code reader
+//     const qrCodeInstance = new QrCode();
+
+//     // 4. Set up a promise to handle the QR reader's callback
+//     const qrCodeData = await new Promise((resolve, reject) => {
+//       qrCodeInstance.callback = (err, value) => {
+//         if (err) {
+//           return reject(err);
+//         }
+//         resolve(value);
+//       };
+//       // 5. Decode the QR code from the image
+//       qrCodeInstance.decode(image.bitmap);
+//     });
+
+//     if (!qrCodeData) {
+//       return res.status(400).json({ message: 'Could not detect a QR code in the image. Please upload a clearer image.' });
+//     }
+
+//     // For now, we will just return the raw data from the QR code.
+//     // In the next step, we will parse this data.
+//     res.status(200).json({
+//       message: 'QR code decoded successfully.',
+//       qrData: qrCodeData.result,
+//     });
+
+//   } catch (error) {
+//     console.error('Aadhaar QR processing error:', error);
+//     res.status(500).json({ message: 'Failed to process the Aadhaar image.' });
+//   } finally {
+//     // 6. Always delete the temporary file from the 'uploads' folder
+//     fs.unlinkSync(filePath);
+//   }
 // };
+
+// ...existing code...
+const fs = require('fs');
+const Jimp = require('jimp');
+const QrCode = require('qrcode-reader');
+const xml2js = require('xml2js'); // Import the new package
+
+// Controller for the /upload-aadhaar route
+exports.uploadAadhaar = async (req, res) => {
+  const userId = req.userId;
+  const file = req.file;
+
+  if (!file) {
+    return res.status(400).json({ message: 'No Aadhaar card image was uploaded.' });
+  }
+
+  const filePath = file.path;
+
+  try {
+    const buffer = fs.readFileSync(filePath);
+    const image = await Jimp.read(buffer);
+    const qrCodeInstance = new QrCode();
+
+    const qrCodeData = await new Promise((resolve, reject) => {
+      qrCodeInstance.callback = (err, value) => err ? reject(err) : resolve(value);
+      qrCodeInstance.decode(image.bitmap);
+    });
+
+    if (!qrCodeData || !qrCodeData.result) {
+      return res.status(400).json({ message: 'Could not detect a QR code in the image.' });
+    }
+
+    // 1. Parse the XML data from the QR code result
+    const parsedXml = await xml2js.parseStringPromise(qrCodeData.result, { explicitArray: false });
+
+    // The data is usually nested inside PrintLetterBarcodeData's attributes ($)
+    const aadhaarData = parsedXml.PrintLetterBarcodeData.$;
+
+    // 2. Extract the required fields
+    const name = aadhaarData.name;
+    const aadhaarNumber = aadhaarData.uid;
+    const address = [
+      aadhaarData.house,
+      aadhaarData.street,
+      aadhaarData.vtc, // Village/Town/City
+      aadhaarData.dist,
+      aadhaarData.state,
+      aadhaarData.pc, // Pincode
+    ].filter(Boolean).join(', '); // Join the parts that exist with a comma
+
+    // 3. Basic Validation: Check if the Aadhaar number is a 12-digit number
+    if (!/^\d{12}$/.test(aadhaarNumber)) {
+      return res.status(422).json({ message: 'Invalid Aadhaar data found in QR code.' });
+    }
+
+    // 4. Find the user in the database and update their profile
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    user.name = name;
+    user.address = address;
+    user.aadhaarNumber = aadhaarNumber;
+    await user.save();
+
+    // 5. Send a final success response
+    res.status(200).json({
+      message: 'Aadhaar details verified and saved successfully!',
+      user: {
+        name: user.name,
+        address: user.address,
+        aadhaarNumber: user.aadhaarNumber,
+      },
+    });
+
+  } catch (error) {
+    console.error('Aadhaar QR processing error:', error);
+    res.status(500).json({ message: 'Failed to process the Aadhaar image. The QR code may be invalid or unreadable.' });
+  } finally {
+    fs.unlinkSync(filePath); // Clean up the uploaded file
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
