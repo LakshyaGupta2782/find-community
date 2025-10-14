@@ -15,6 +15,9 @@ const userSchema = new mongoose.Schema({
   aadhaarNumber: {
     type: String,
   },
+   currentLocation: {
+    type: String,
+  },
   // We will add more fields like currentLocation later
 }, { timestamps: true }); // timestamps adds createdAt and updatedAt fields
 

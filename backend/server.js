@@ -21,6 +21,12 @@ app.get('/', (req, res) => {
   res.send('Community Connect Platform Backend API');
 });
 
+// Routes
+const authRoutes = require('./routes/authRoutes');
+const communityRoutes = require('./routes/communityRoutes');
+
+app.use('/api/auth', authRoutes);
+app.use('/api/community', communityRoutes); 
 
 // Start Server
 app.listen(PORT, () => {

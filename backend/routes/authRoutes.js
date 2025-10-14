@@ -19,6 +19,9 @@ router.post(
   authController.uploadAadhaar
 );
 
+// New route for updating the user's current location
+router.post('/update-location', auth, authController.updateLocation);
+
 module.exports = router;
 
 router.post('/upload-aadhaar', authController.uploadAadhaar);

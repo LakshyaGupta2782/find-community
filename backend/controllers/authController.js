@@ -38,7 +38,7 @@ exports.signin = async (req, res) => {
     const { email } = req.body;
 
     // 1. Check if a user with this email exists
-    
+
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ message: 'User not found. Please sign up first.' });
@@ -126,7 +126,7 @@ exports.verifyOtp = async (req, res) => {
 
 //     // 1. Check if a file was actually uploaded
 //     if (!file) {
-//       return res.status(400).json({ message: 'No Aadhaar card image was uploaded.' });
+//       return res.status(400).json({ message: 'No Aadhaar card image was uploaded.'});
 //     }
 
 //     // For now, we will just confirm that we received the file.
@@ -207,10 +207,105 @@ exports.verifyOtp = async (req, res) => {
 // };
 
 // ...existing code...
+// const fs = require('fs');
+// const Jimp = require('jimp');
+// const QrCode = require('qrcode-reader');
+// const xml2js = require('xml2js'); // Import the new package
+
+// // Controller for the /upload-aadhaar route
+// exports.uploadAadhaar = async (req, res) => {
+//   const userId = req.userId;
+//   const file = req.file;
+
+//   if (!file) {
+//     return res.status(400).json({ message: 'No Aadhaar card image was uploaded.' });
+//   }
+
+//   const filePath = file.path;
+
+//   try {
+//     const buffer = fs.readFileSync(filePath);
+//     const image = await Jimp.read(buffer);
+//     const qrCodeInstance = new QrCode();
+
+//     const qrCodeData = await new Promise((resolve, reject) => {
+//       qrCodeInstance.callback = (err, value) => err ? reject(err) : resolve(value);
+//       qrCodeInstance.decode(image.bitmap);
+//     });
+
+//     if (!qrCodeData || !qrCodeData.result) {
+//       return res.status(400).json({ message: 'Could not detect a QR code in the image.' });
+//     }
+
+//     // 1. Parse the XML data from the QR code result
+//     const parsedXml = await xml2js.parseStringPromise(qrCodeData.result, { explicitArray: false });
+
+//     // The data is usually nested inside PrintLetterBarcodeData's attributes ($)
+//     const aadhaarData = parsedXml.PrintLetterBarcodeData.$;
+
+//     // 2. Extract the required fields
+//     const name = aadhaarData.name;
+//     const aadhaarNumber = aadhaarData.uid;
+//     const address = [
+//       aadhaarData.house,
+//       aadhaarData.street,
+//       aadhaarData.vtc, // Village/Town/City
+//       aadhaarData.dist,
+//       aadhaarData.state,
+//       aadhaarData.pc, // Pincode
+//     ].filter(Boolean).join(', '); // Join the parts that exist with a comma
+
+//     // 3. Basic Validation: Check if the Aadhaar number is a 12-digit number
+//     if (!/^\d{12}$/.test(aadhaarNumber)) {
+//       return res.status(422).json({ message: 'Invalid Aadhaar data found in QR code.' });
+//     }
+
+//     // 4. Find the user in the database and update their profile
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res.status(404).json({ message: 'User not found.' });
+//     }
+
+//     user.name = name;
+//     user.address = address;
+//     user.aadhaarNumber = aadhaarNumber;
+//     await user.save();
+
+//     // 5. Send a final success response
+//     res.status(200).json({
+//       message: 'Aadhaar details verified and saved successfully!',
+//       user: {
+//         name: user.name,
+//         address: user.address,
+//         aadhaarNumber: user.aadhaarNumber,
+//       },
+//     });
+
+//   } catch (error) {
+//     console.error('Aadhaar QR processing error:', error);
+//     res.status(500).json({ message: 'Failed to process the Aadhaar image. The QR code may be invalid or unreadable.' });
+//   } finally {
+//     fs.unlinkSync(filePath); // Clean up the uploaded file
+//   }
+// };
+
+
+
+
+
+
+
+// ...existing code...
 const fs = require('fs');
+const path = require('path'); // Import path module
 const Jimp = require('jimp');
 const QrCode = require('qrcode-reader');
-const xml2js = require('xml2js'); // Import the new package
+const xml2js = require('xml2js');
+const crypto = require('crypto'); // Node.js crypto module for verification
+const pako = require('pako'); // For decompressing QR data
+
+// Load the UIDAI public key from the certificate file
+const uidaiPublicKey = fs.readFileSync(path.join(__dirname, '../certs/uidai_public_key.pem'));
 
 // Controller for the /upload-aadhaar route
 exports.uploadAadhaar = async (req, res) => {
@@ -228,39 +323,57 @@ exports.uploadAadhaar = async (req, res) => {
     const image = await Jimp.read(buffer);
     const qrCodeInstance = new QrCode();
 
-    const qrCodeData = await new Promise((resolve, reject) => {
+    const qrCodeValue = await new Promise((resolve, reject) => {
       qrCodeInstance.callback = (err, value) => err ? reject(err) : resolve(value);
       qrCodeInstance.decode(image.bitmap);
     });
 
-    if (!qrCodeData || !qrCodeData.result) {
+    if (!qrCodeValue || !qrCodeValue.result) {
       return res.status(400).json({ message: 'Could not detect a QR code in the image.' });
     }
 
-    // 1. Parse the XML data from the QR code result
-    const parsedXml = await xml2js.parseStringPromise(qrCodeData.result, { explicitArray: false });
+    // Secure QR codes store data as a large number (BigInt)
+    const qrDataBigInt = BigInt(qrCodeValue.result);
+    const qrDataBytes = Buffer.from(qrDataBigInt.toString(16), 'hex');
 
-    // The data is usually nested inside PrintLetterBarcodeData's attributes ($)
-    const aadhaarData = parsedXml.PrintLetterBarcodeData.$;
+    // The last 256 bytes are the signature
+    const signature = qrDataBytes.slice(-256);
+    // The data to be verified is everything before the signature
+    const dataToVerify = qrDataBytes.slice(0, -256);
 
-    // 2. Extract the required fields
-    const name = aadhaarData.name;
-    const aadhaarNumber = aadhaarData.uid;
-    const address = [
-      aadhaarData.house,
-      aadhaarData.street,
-      aadhaarData.vtc, // Village/Town/City
-      aadhaarData.dist,
-      aadhaarData.state,
-      aadhaarData.pc, // Pincode
-    ].filter(Boolean).join(', '); // Join the parts that exist with a comma
+    // Create a verification object
+    const verifier = crypto.createVerify('sha256');
+    verifier.update(dataToVerify);
+    verifier.end();
 
-    // 3. Basic Validation: Check if the Aadhaar number is a 12-digit number
-    if (!/^\d{12}$/.test(aadhaarNumber)) {
-      return res.status(422).json({ message: 'Invalid Aadhaar data found in QR code.' });
+    // Verify the data against the signature using the public key
+    const isSignatureValid = verifier.verify(uidaiPublicKey, signature);
+
+    if (!isSignatureValid) {
+      return res.status(422).json({ message: 'Aadhaar verification failed: The digital signature is invalid.' });
     }
 
-    // 4. Find the user in the database and update their profile
+    // If signature is valid, decompress the data to get user details
+    const decompressedData = pako.inflate(dataToVerify);
+    const dataString = new TextDecoder().decode(decompressedData);
+
+    // The data is a delimited string. We need to parse it.
+    const aadhaarFields = dataString.split(',').reduce((acc, part) => {
+      const [key, ...value] = part.split(':');
+      if (key && value.length > 0) {
+        acc[key.trim()] = value.join(':').trim();
+      }
+      return acc;
+    }, {});
+
+    const name = aadhaarFields.n;
+    const aadhaarLast4Digits = aadhaarFields.l; // Secure QR only gives last 4 digits
+    const address = [
+      aadhaarFields.h, aadhaarFields.s, aadhaarFields.vtc,
+      aadhaarFields.d, aadhaarFields.st, aadhaarFields.p
+    ].filter(Boolean).join(', ');
+
+    // Find the user and save the verified data
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
@@ -268,33 +381,57 @@ exports.uploadAadhaar = async (req, res) => {
 
     user.name = name;
     user.address = address;
-    user.aadhaarNumber = aadhaarNumber;
+    // Note: Secure QR does not expose the full Aadhaar number for privacy.
+    user.aadhaarNumber = `********${aadhaarLast4Digits}`; // Store partial number
     await user.save();
 
-    // 5. Send a final success response
     res.status(200).json({
-      message: 'Aadhaar details verified and saved successfully!',
-      user: {
-        name: user.name,
-        address: user.address,
-        aadhaarNumber: user.aadhaarNumber,
-      },
+      message: 'Aadhaar details successfully verified and saved!',
+      user: { name: user.name, address: user.address },
     });
 
   } catch (error) {
-    console.error('Aadhaar QR processing error:', error);
-    res.status(500).json({ message: 'Failed to process the Aadhaar image. The QR code may be invalid or unreadable.' });
+    console.error('Aadhaar verification error:', error);
+    res.status(500).json({ message: 'Failed to process Aadhaar. The QR code may not be a valid Secure QR code.' });
   } finally {
-    fs.unlinkSync(filePath); // Clean up the uploaded file
+    fs.unlinkSync(filePath);
   }
 };
 
 
+// Controller for the /update-location route
+exports.updateLocation = async (req, res) => {
+  try {
+    // The 'auth' middleware has already added the userId to the request object.
+    const userId = req.userId;
+    const { currentLocation } = req.body;
 
+    // 1. Check if currentLocation was provided
+    if (!currentLocation) {
+      return res.status(400).json({ message: 'Current location is required.' });
+    }
 
+    // 2. Find the user in the database
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
 
+    // 3. Update the user's location and save it
+    user.currentLocation = currentLocation;
+    await user.save();
 
+    // 4. Send a success response
+    res.status(200).json({
+      message: 'Location updated successfully!',
+      currentLocation: user.currentLocation,
+    });
 
+  } catch (error) {
+    console.error('Location update error:', error);
+    res.status(500).json({ message: 'Server error during location update.' });
+  }
+};
 
 
 
