@@ -1,8 +1,10 @@
 const express = require('express');
+
 const router = express.Router();
 const authController = require('../controllers/authController');
 const auth = require('../middleware/auth'); // Import the auth middleware
 const multer = require('multer'); // Import multer
+const upload = multer({ dest: 'uploads/' }); 
 
 router.post('/signup', authController.signup);
 router.post('/signin', authController.signin);
