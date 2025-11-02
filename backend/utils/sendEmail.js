@@ -1,8 +1,8 @@
 const nodemailer = require('nodemailer');
-
 const sendOTPEmail = async (email, otp) => {
   try {
     // Create a transporter object using Gmail SMTP
+    console.log(process.env.EMAIL_USER, process.env.EMAIL_PASS ? "PASS FOUND" : "NO PASS");
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
