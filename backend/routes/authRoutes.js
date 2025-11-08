@@ -1,29 +1,28 @@
 const express = require('express');
-
 const router = express.Router();
 const authController = require('../controllers/authController');
 const auth = require('../middleware/auth'); // Import the auth middleware
-const multer = require('multer'); // Import multer
-const upload = multer({ dest: 'uploads/' }); 
+// const multer = require('multer'); // Import multer
+// const upload = multer({ dest: 'uploads/' }); 
 
 router.post('/signup', authController.signup);
 router.post('/signin', authController.signin);
 router.post('/verify-otp', authController.verifyOtp);
+router.post('/update-location', auth, authController.updateLocation);
+
+module.exports = router;
 
 // New route for Aadhaar upload
 // 1. 'auth' middleware runs first to check for a valid JWT token.
 // 2. 'upload.single('aadhaarCard')' middleware handles the single file upload.
 //    The frontend must send the file with the field name 'aadhaarCard'.
-router.post(
-  '/upload-aadhaar',
-  auth,
-  upload.single('aadhaarCard'),
-  authController.uploadAadhaar
-);
+// router.post(
+//   '/upload-aadhaar',
+//   auth,
+//   upload.single('aadhaarCard'),
+//   authController.uploadAadhaar
+// );
 
 // New route for updating the user's current location
-router.post('/update-location', auth, authController.updateLocation);
 
-module.exports = router;
-
-router.post('/upload-aadhaar', authController.uploadAadhaar);
+// router.post('/upload-aadhaar', authController.uploadAadhaar);
