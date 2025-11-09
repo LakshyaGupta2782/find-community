@@ -3,7 +3,7 @@ const User = require("./models/user");
 
 // ✅ Replace with your actual DB connection string
 mongoose
-  .connect("mongodb://localhost:27017/yourdbname", {
+  .connect("mongodb+srv://lakshya2782:saksham3009@cluster0.htwgvju.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0", {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
